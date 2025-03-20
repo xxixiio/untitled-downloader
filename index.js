@@ -2,7 +2,7 @@ const readline = require("node:readline");
 const cheerio = require("cheerio");
 const https = require("https");
 const fs = require("fs");
-const { resolve } = require("node:path");
+const NodeID3 = require('node-id3');
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -10,17 +10,44 @@ const rl = readline.createInterface({
 });
 
 rl.question(`Paste UNTITLED.STREAM URL: `, async (url) => {
+  rl.question(
+    `Enter the path where the file should be saved: `,
+    async (path) => {
+      main(url, path);
+      rl.close();
+    }
+  );
+});
+
+async function main(url, path) {
   url = "https://untitled.stream/library/project/8KqqxISbQrxrAoWY1WSxA";
+  path = "/Users/basti/Music/test";
+
+  let createdFiles = [];
 
   let albumData = await getAlbumData(url);
-  let downloadUrl = await generateDownloadUrl(
-    albumData.tracks[0].downloadablePath
-  );
 
-  downloadFile("file.mp3", albumData.tracks[0].title, downloadUrl);
+  albumData.tracks.forEach(async (trackData) => {
+    let downloadUrl = await generateDownloadUrl(
+      trackData.downloadablePath
+    );
 
-  rl.close();
-});
+    // Remove slashes from title since they can cause pathing errors.
+    let filePath = downloadFile(
+      path,
+      trackData.title.replace(/\//g, ""),
+      downloadUrl
+    );
+
+    trackData.path = filePath;
+
+    // Add metadata to the file.
+    addMetadata(filePath, trackData, albumData);
+
+    createdFiles.push(trackData);
+    console.log(trackData)
+  });
+}
 
 async function getAlbumData(url) {
   const $ = await cheerio.fromURL(url);
@@ -40,7 +67,7 @@ async function getAlbumData(url) {
   let albumData = {
     title: rawProject.title,
     artist_name: rawProject.artist_name,
-    cover_url: rawProject.artwork_url,
+    cover_url: rawProject.artwork_signed_url,
     token: rawAlbumData.state.loaderData.root.env.SUPABASE_ANON_PUBLIC,
     tracks: [],
   };
@@ -54,6 +81,7 @@ async function getAlbumData(url) {
     albumData.tracks.push({
       title: track.title,
       filename: getFilename(track.audio_fallback_url),
+      artist_name: rawProject.artist_name,
       downloadablePath,
       //downloadableUrl: getDownloadableUrl(downloadablePath),
     });
@@ -132,8 +160,27 @@ function generateDownloadUrl(downloadablePath) {
 }
 
 function downloadFile(path, name, url) {
-  let file = fs.createWriteStream(path);
+  path = path.endsWith("/") ? path : path + "/"; // Add trailing slash if not present.
+  let file = fs.createWriteStream(path + name + ".mp3");
   let request = https.get(url, function (response) {
     response.pipe(file);
+  });
+
+  return path + name + ".mp3";
+}
+
+function addMetadata(filePath, trackData, albumData) {
+  const tags = {
+    title: trackData.title,
+    artist: albumData.artist_name,
+    album: albumData.title,
+  };
+
+  NodeID3.write(tags, filePath, (err) => {
+    if (err) {
+      console.error('Error when modifying metadata:', err);
+    } else {
+      console.log(trackData.title + ': Added metadata.');
+    }
   });
 }
