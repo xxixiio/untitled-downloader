@@ -1,7 +1,8 @@
 const readline = require("node:readline");
 const cheerio = require("cheerio");
 const https = require("https");
-const { hostname } = require("node:os");
+const fs = require("fs");
+const { resolve } = require("node:path");
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -11,9 +12,12 @@ const rl = readline.createInterface({
 rl.question(`Paste UNTITLED.STREAM URL: `, async (url) => {
   url = "https://untitled.stream/library/project/8KqqxISbQrxrAoWY1WSxA";
 
-  getAlbumData(url).then((data) => {
-    console.log(postUrl("AAA", data.tracks[0].downloadablePath));
-  });
+  let albumData = await getAlbumData(url);
+  let downloadUrl = await generateDownloadUrl(
+    albumData.tracks[0].downloadablePath
+  );
+
+  downloadFile("file.mp3", albumData.tracks[0].title, downloadUrl);
 
   rl.close();
 });
@@ -51,7 +55,7 @@ async function getAlbumData(url) {
       title: track.title,
       filename: getFilename(track.audio_fallback_url),
       downloadablePath,
-      downloadableUrl: getDownloadableUrl(downloadablePath),
+      //downloadableUrl: getDownloadableUrl(downloadablePath),
     });
   });
 
@@ -72,52 +76,64 @@ function getDownloadablePath(ownerAuthId, filename) {
   );
 }
 
-function getDownloadableUrl(path) {
+/*function getDownloadableUrl(path) {
   return "https://untitled.stream" + path;
-}
+}*/
 
-function postUrl(path, downloadablePath) {
+function generateDownloadUrl(downloadablePath) {
   // POST request to get the download link.
   //console.log(downloadablePath);
-  let body = JSON.stringify({ expiresIn: 10800 });
+  return new Promise((resolve, reject) => {
+    let body = JSON.stringify({ expiresIn: 10800 });
 
-  let options = {
-    hostname: "untitled.stream",
-    port: 443,
-    path: downloadablePath.startsWith("/") ? downloadablePath : `/${downloadablePath}`,
-    method: "POST",
-    headers: {
-      "Host": "untitled.stream",
-      "Content-Type": "application/json",
-      "Content-Length": Buffer.byteLength(body, "utf8"),
-      "Accept": "*/*"
-    },
-  };
+    let options = {
+      hostname: "untitled.stream",
+      port: 443,
+      path: downloadablePath.startsWith("/")
+        ? downloadablePath
+        : `/${downloadablePath}`,
+      method: "POST",
+      headers: {
+        Host: "untitled.stream",
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(body, "utf8"),
+        Accept: "*/*",
+      },
+    };
 
-  let downloadUrl = "";
+    let req = https.request(options, (res) => {
+      //console.log("statusCode:", res.statusCode);
+      //console.log("headers:", res.headers);
 
-  let req = https.request(options, (res) => {
-    console.log("statusCode:", res.statusCode);
-    console.log("headers:", res.headers);
+      let data = "";
+      let downloadUrl = "";
 
-    let data = "";
+      res.on("data", (d) => {
+        data += d;
+      });
 
-    res.on("data", (d) => {
-      data += d;
+      res.on("end", () => {
+        try {
+          downloadUrl = JSON.parse(data).url;
+          resolve(downloadUrl);
+        } catch (e) {
+          console.error("Error parsing JSON:", e.message);
+        }
+      });
     });
 
-    res.on("end", () => {
-      downloadUrl = JSON.parse(data).url;
-      console.log(downloadUrl)
+    req.on("error", (e) => {
+      console.error("Request error:", e.message);
     });
+
+    req.write(body);
+    req.end();
   });
+}
 
-  req.on("error", (e) => {
-    console.error("Request error:", e.message);
+function downloadFile(path, name, url) {
+  let file = fs.createWriteStream(path);
+  let request = https.get(url, function (response) {
+    response.pipe(file);
   });
-
-  req.write(body);
-  req.end();
-
-  return downloadUrl;
 }
