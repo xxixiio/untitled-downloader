@@ -7,21 +7,15 @@ const rl = readline.createInterface({
   output: process.stdout,
 });
 
-rl.question(`Paste UNTITLED.STREAM URL: `, (url) => {
-  let rawHTML = getHTML(url);
+rl.question(`Paste UNTITLED.STREAM URL: `, async (url) => {
+  url = "https://untitled.stream/library/project/8KqqxISbQrxrAoWY1WSxA";
 
+  const $ = await cheerio.fromURL(url);
+  const rawAlbumData = $('script:contains("tracks")').html();
+  const stringAlbumData = rawAlbumData.replace(/.*?=\s*|\s*;$/g, '');
+  const albumData = JSON.parse(stringAlbumData);
+
+  console.log(albumData)
+  
   rl.close();
 });
-
-function getHTML(url) {
-  https
-    .get(url, function (res) {
-      res.setEncoding("utf8");
-      res.on("data", function (data) {
-        return data;
-      });
-    })
-    .on("error", function (err) {
-      console.error(err);
-    });
-}
