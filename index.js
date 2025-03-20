@@ -12,7 +12,7 @@ rl.question(`Paste UNTITLED.STREAM URL: `, async (url) => {
   url = "https://untitled.stream/library/project/8KqqxISbQrxrAoWY1WSxA";
 
   getAlbumData(url).then((data) => {
-    postUrl("AAA", data.tracks[0].downloadablePath);
+    console.log(postUrl("AAA", data.tracks[0].downloadablePath));
   });
 
   rl.close();
@@ -20,8 +20,9 @@ rl.question(`Paste UNTITLED.STREAM URL: `, async (url) => {
 
 async function getAlbumData(url) {
   const $ = await cheerio.fromURL(url);
-  let rawAlbumData = $('script:contains("tracks")').html();
   // TODO: Better way to do the object parse.
+  // Don't like this method but this is the only way I found to get all the data.
+  let rawAlbumData = $('script:contains("tracks")').html();
   rawAlbumData = JSON.parse(
     rawAlbumData.replace("window.__remixContext = ", "").replace(";", "").trim()
   );
@@ -48,12 +49,9 @@ async function getAlbumData(url) {
 
     albumData.tracks.push({
       title: track.title,
-      //version_count: track.version_count,
       filename: getFilename(track.audio_fallback_url),
       downloadablePath,
       downloadableUrl: getDownloadableUrl(downloadablePath),
-      /*audio_url: track.audio_url,
-      audio_fallback_url: track.audio_fallback_url,*/
     });
   });
 
@@ -78,33 +76,48 @@ function getDownloadableUrl(path) {
   return "https://untitled.stream" + path;
 }
 
-function postUrl(path, downloadableUrl) {
+function postUrl(path, downloadablePath) {
+  // POST request to get the download link.
+  //console.log(downloadablePath);
   let body = JSON.stringify({ expiresIn: 10800 });
+
   let options = {
     hostname: "untitled.stream",
     port: 443,
-    body,
-    path: path,
+    path: downloadablePath.startsWith("/") ? downloadablePath : `/${downloadablePath}`,
     method: "POST",
     headers: {
+      "Host": "untitled.stream",
       "Content-Type": "application/json",
-      "Content-Length": body.length,
+      "Content-Length": Buffer.byteLength(body, "utf8"),
+      "Accept": "*/*"
     },
   };
+
+  let downloadUrl = "";
 
   let req = https.request(options, (res) => {
     console.log("statusCode:", res.statusCode);
     console.log("headers:", res.headers);
 
+    let data = "";
+
     res.on("data", (d) => {
-      process.stdout.write(d);
+      data += d;
+    });
+
+    res.on("end", () => {
+      downloadUrl = JSON.parse(data).url;
+      console.log(downloadUrl)
     });
   });
 
   req.on("error", (e) => {
-    console.error(e);
+    console.error("Request error:", e.message);
   });
 
   req.write(body);
   req.end();
+
+  return downloadUrl;
 }
