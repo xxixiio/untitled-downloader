@@ -1,7 +1,7 @@
 const readline = require("node:readline");
 const cheerio = require("cheerio");
 const https = require("https");
-
+const { hostname } = require("node:os");
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -12,7 +12,7 @@ rl.question(`Paste UNTITLED.STREAM URL: `, async (url) => {
   url = "https://untitled.stream/library/project/8KqqxISbQrxrAoWY1WSxA";
 
   getAlbumData(url).then((data) => {
-    console.log(data);
+    postUrl("AAA", data.tracks[0].downloadablePath);
   });
 
   rl.close();
@@ -41,11 +41,17 @@ async function getAlbumData(url) {
   };
 
   rawTracks.forEach((track) => {
+    let downloadablePath = getDownloadablePath(
+      track.owner_auth_id,
+      getFilename(track.audio_fallback_url)
+    );
+
     albumData.tracks.push({
       title: track.title,
       //version_count: track.version_count,
       filename: getFilename(track.audio_fallback_url),
-      url: downloadableUrl(track.owner_auth_id, getFilename(track.audio_fallback_url)),
+      downloadablePath,
+      downloadableUrl: getDownloadableUrl(downloadablePath),
       /*audio_url: track.audio_url,
       audio_fallback_url: track.audio_fallback_url,*/
     });
@@ -58,6 +64,47 @@ function getFilename(trackUrl) {
   return trackUrl.split("/").pop();
 }
 
-function downloadableUrl(ownerAuthId, filename) {
-  return "https://untitled.stream/api/storage/buckets/private-transcoded-audio/objects/" + ownerAuthId + "%2F" + filename + "/signedUrl";
+function getDownloadablePath(ownerAuthId, filename) {
+  return (
+    "/api/storage/buckets/private-transcoded-audio/objects/" +
+    ownerAuthId +
+    "%2F" +
+    filename +
+    "/signedUrl"
+  );
+}
+
+function getDownloadableUrl(path) {
+  return "https://untitled.stream" + path;
+}
+
+function postUrl(path, downloadableUrl) {
+  let body = JSON.stringify({ expiresIn: 10800 });
+  let options = {
+    hostname: "untitled.stream",
+    port: 443,
+    body,
+    path: path,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Content-Length": body.length,
+    },
+  };
+
+  let req = https.request(options, (res) => {
+    console.log("statusCode:", res.statusCode);
+    console.log("headers:", res.headers);
+
+    res.on("data", (d) => {
+      process.stdout.write(d);
+    });
+  });
+
+  req.on("error", (e) => {
+    console.error(e);
+  });
+
+  req.write(body);
+  req.end();
 }
