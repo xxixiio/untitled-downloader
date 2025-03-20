@@ -1,8 +1,11 @@
 const readline = require("node:readline");
+const fs = require("fs");
+
 const cheerio = require("cheerio");
 const https = require("https");
-const fs = require("fs");
-const NodeID3 = require('node-id3');
+const axios = require('axios');
+
+const NodeID3 = require("node-id3");
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -20,33 +23,49 @@ rl.question(`Paste UNTITLED.STREAM URL: `, async (url) => {
 });
 
 async function main(url, path) {
-  url = "https://untitled.stream/library/project/8KqqxISbQrxrAoWY1WSxA";
-  path = "/Users/basti/Music/test";
+  if (!url || !url.trim() || !url.startsWith("https://untitled.stream/library/project/")) {
+    console.error("Error: Invalid URL. Please provide a valid untitled.stream project URL.");
+    return;
+  }
+  
+  if (!path || !path.trim()) {
+    console.error("Error: Invalid path. Please provide a valid directory path.");
+    return;
+  }
 
   let createdFiles = [];
 
   let albumData = await getAlbumData(url);
+  console.log(`Downloading album: ${albumData.title} by ${albumData.artist_name}`);
+  console.log(`Found ${albumData.tracks.length} tracks to download...`);
 
-  albumData.tracks.forEach(async (trackData) => {
-    let downloadUrl = await generateDownloadUrl(
-      trackData.downloadablePath
-    );
+  // Use Promise.all with map instead of forEach to properly wait for all downloads
+  await Promise.all(albumData.tracks.map(async (trackData) => {
+    try {
+      let downloadUrl = await generateDownloadUrl(
+        trackData.downloadablePath
+      );
 
-    // Remove slashes from title since they can cause pathing errors.
-    let filePath = downloadFile(
-      path,
-      trackData.title.replace(/\//g, ""),
-      downloadUrl
-    );
+      // Remove slashes from title since they can cause pathing errors.
+      let filePath = await downloadFile(
+        path,
+        trackData.title.replace(/\//g, ""),
+        downloadUrl
+      );
 
-    trackData.path = filePath;
+      trackData.path = filePath;
 
-    // Add metadata to the file.
-    addMetadata(filePath, trackData, albumData);
+      // Add metadata to the file after download is complete
+      await addMetadata(filePath, trackData, albumData);
 
-    createdFiles.push(trackData);
-    console.log(trackData)
-  });
+      createdFiles.push(trackData);
+      console.log(`Completed: ${trackData.title}`);
+    } catch (error) {
+      console.error(`Error processing track ${trackData.title}:`, error);
+    }
+  }));
+  
+  console.log(`\nDownload complete! Downloaded ${createdFiles.length}/${albumData.tracks.length} tracks.`);
 }
 
 async function getAlbumData(url) {
@@ -160,27 +179,63 @@ function generateDownloadUrl(downloadablePath) {
 }
 
 function downloadFile(path, name, url) {
-  path = path.endsWith("/") ? path : path + "/"; // Add trailing slash if not present.
-  let file = fs.createWriteStream(path + name + ".mp3");
-  let request = https.get(url, function (response) {
-    response.pipe(file);
+  return new Promise((resolve, reject) => {
+    path = path.endsWith("/") ? path : path + "/"; // Add trailing slash if not present.
+    const filePath = path + name + ".mp3";
+    let file = fs.createWriteStream(filePath);
+    
+    console.log(`Downloading: ${name}`);
+    
+    let request = https.get(url, function (response) {
+      response.pipe(file);
+      
+      file.on('finish', () => {
+        file.close();
+        console.log(`Download finished: ${name}`);
+        resolve(filePath);
+      });
+      
+      file.on('error', (err) => {
+        fs.unlink(filePath, () => {}); // Delete the file if there was an error
+        reject(err);
+      });
+    });
+    
+    request.on('error', (err) => {
+      fs.unlink(filePath, () => {}); // Delete the file if there was an error
+      reject(err);
+    });
   });
-
-  return path + name + ".mp3";
 }
 
 function addMetadata(filePath, trackData, albumData) {
-  const tags = {
-    title: trackData.title,
-    artist: albumData.artist_name,
-    album: albumData.title,
-  };
+  return new Promise(async (resolve, reject) => {
+    const res = await axios({
+      url: albumData.cover_url,
+      responseType: 'arraybuffer',
+    });
 
-  NodeID3.write(tags, filePath, (err) => {
-    if (err) {
-      console.error('Error when modifying metadata:', err);
-    } else {
-      console.log(trackData.title + ': Added metadata.');
-    }
+    const tags = {
+      title: trackData.title,
+      artist: albumData.artist_name,
+      album: albumData.title,
+      image: {
+        imageBuffer: Buffer.from(res.data),
+        mime: 'image/jpeg',
+        description: 'cover',
+        type: 3
+      }
+
+    };
+
+    NodeID3.write(tags, filePath, (err) => {
+      if (err) {
+        console.error('Error when modifying metadata:', err);
+        reject(err);
+      } else {
+        console.log(trackData.title + ': Added metadata.');
+        resolve();
+      }
+    });
   });
 }
