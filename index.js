@@ -43,11 +43,21 @@ async function getAlbumData(url) {
   rawTracks.forEach((track) => {
     albumData.tracks.push({
       title: track.title,
-      version_count: track.version_count,
-      audio_url: track.audio_url,
-      audio_fallback_url: track.audio_fallback_url,
+      //version_count: track.version_count,
+      filename: getFilename(track.audio_fallback_url),
+      url: downloadableUrl(track.owner_auth_id, getFilename(track.audio_fallback_url)),
+      /*audio_url: track.audio_url,
+      audio_fallback_url: track.audio_fallback_url,*/
     });
   });
 
   return albumData;
+}
+
+function getFilename(trackUrl) {
+  return trackUrl.split("/").pop();
+}
+
+function downloadableUrl(ownerAuthId, filename) {
+  return "https://untitled.stream/api/storage/buckets/private-transcoded-audio/objects/" + ownerAuthId + "%2F" + filename + "/signedUrl";
 }
