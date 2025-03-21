@@ -1,4 +1,4 @@
-# UNTITLED.STREAM Album Downloader
+# UNTITLED.STREAM Album Downloader with Metadata
 
 This Node.js application provides an efficient way to download tracks from an UNTITLED.STREAM album, save them locally as MP3 files, and automatically embed metadata such as title, artist, and album information into each file. This tool simplifies the process of organizing music from UNTITLED.STREAM for personal use or archival purposes.
 
@@ -26,15 +26,6 @@ To set up the project, follow these steps:
    ```bash
    npm install
    ```
-   
-## Technical Overview
-The script performs the following steps:
-
-Data Scraping: Scrapes the UNTITLED.STREAM page to gather album and track data using cheerio.
-Download URL Generation: Generates signed download URLs for each track via a POST request to the UNTITLED.STREAM API.
-Track Downloading: Downloads the tracks as MP3 files and saves them to the user-defined path.
-Metadata Embedding: Adds track-specific metadata to each MP3 file to ensure proper organization in music libraries.
-
 # License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
