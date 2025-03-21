@@ -6,8 +6,6 @@ This Node.js application provides an efficient way to download tracks from an UN
 
 - **Album Track Downloading**: Downloads all tracks from a specified UNTITLED.STREAM album.
 - **Metadata Embedding**: Automatically adds essential metadata (track title, artist name, and album name) to each downloaded MP3 file.
-- **Error Handling**: Includes robust error handling for file downloads and metadata embedding.
-- **User-Friendly Interface**: The application prompts for user input to easily obtain album URL and download location.
 
 ## Requirements
 
