@@ -41,6 +41,7 @@ async function main(url, path) {
   let createdFiles = [];
 
   let albumData = await getAlbumData(url);
+  // console.log(albumData);
   console.log(
     `Downloading album: ${albumData.title} by ${albumData.artist_name}`
   );

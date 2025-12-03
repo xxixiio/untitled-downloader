@@ -13,7 +13,7 @@ function generateDownloadUrl(downloadablePath) {
       path: downloadablePath.startsWith("/")
         ? downloadablePath
         : `/${downloadablePath}`,
-      method: "POST",
+      method: "GET",
       headers: {
         Host: "untitled.stream",
         "Content-Type": "application/json",
